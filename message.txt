@@ -1,0 +1,166 @@
+--[[
+   Этот скрипт генерирует лабиринт в Roblox.
+   Он использует алгоритм Recursive Backtracker (Алгоритм рекурсивного обхода)
+   для создания лабиринта с гарантированным путем от входа к выходу.
+--]]
+local mazeOrigin = Vector3.new(0, 0, 0)
+local cellSize = 20 -- Размер одной ячейки лабиринта (должно быть четным)
+local wallHeight = 22 -- Высота стен
+local mazeWidth = 35  -- Ширина лабиринта (в ячейках)35 нужно поменять и в ServerScriptService.monsterspawn
+local mazeHeight = 35 -- Высота лабиринта (в ячейках)35 нужно поменять и в ServerScriptService.monsterspawn
+local entrancePosition = Vector3.new(cellSize/2,wallHeight/2,cellSize/2) -- Позиция входа
+local exitPositionOffset = Vector3.new(mazeWidth*cellSize-cellSize/2,wallHeight/2,mazeHeight*cellSize-cellSize/2) -- Позиция выхода
+local spawnPositionOffset = Vector3.new(mazeWidth*cellSize-cellSize/2, 0,mazeHeight*cellSize-cellSize/2) -- Позиция спавна игрока
+local mazeFolder = workspace:WaitForChild("Maze") -- Папка, где будут стены лабиринта
+
+local function createPart(position, size, color, parent)
+	local part = Instance.new("Part")
+	part.Anchored = true
+	part.CanCollide = true
+	part.Size = size
+	part.Position = position + mazeOrigin
+	part.Material = Enum.Material.Wood
+	part.Color = color
+	part.Parent = parent
+	return part
+end
+
+local function generateMaze(width, height)
+	local maze = {}
+	for i = 1, height do
+		maze[i] = {}
+		for j = 1, width do
+			maze[i][j] = {
+				north = true,
+				east = true,
+				south = true,
+				west = true,
+				visited = false
+			}
+		end
+	end
+	return maze
+end
+
+local function carvePath(maze, x, y)
+	maze[y][x].visited = true
+	local directions = {"north", "east", "south", "west"}
+	local random = Random.new()
+
+	while #directions > 0 do
+		local randomIndex = random:NextInteger(1, #directions)
+		local direction = directions[randomIndex]
+		table.remove(directions, randomIndex)
+
+		local nx, ny = x, y
+		if direction == "north" then
+			ny = y - 1
+		elseif direction == "east" then
+			nx = x + 1
+		elseif direction == "south" then
+			ny = y + 1
+		elseif direction == "west" then
+			nx = x - 1
+		end
+
+		if nx > 0 and nx <= #maze[1] and ny > 0 and ny <= #maze then
+			if not maze[ny][nx].visited then
+				if direction == "north" then
+					maze[y][x].north = false
+					maze[ny][nx].south = false
+				elseif direction == "east" then
+					maze[y][x].east = false
+					maze[ny][nx].west = false
+				elseif direction == "south" then
+					maze[y][x].south = false
+					maze[ny][nx].north = false
+				elseif direction == "west" then
+					maze[y][x].west = false
+					maze[ny][nx].east = false
+				end
+				carvePath(maze, nx, ny)
+			end
+		end
+	end
+end
+
+local function buildMaze(maze)
+	-- Создание пола
+	local floorSize = Vector3.new(mazeWidth * cellSize, 1, mazeHeight * cellSize)
+	local floorPosition = Vector3.new((mazeWidth * cellSize) / 2, -0.5, (mazeHeight * cellSize) / 2)
+	local floor = createPart(floorPosition, floorSize, Color3.new(0.5, 0.3, 0.1), mazeFolder)
+	local upfloorSize = Vector3.new(mazeWidth * cellSize, 1, mazeHeight * cellSize)
+	local upfloorPosition = Vector3.new((mazeWidth * cellSize) / 2, wallHeight, (mazeHeight * cellSize) / 2)
+	local upfloor = createPart(upfloorPosition, upfloorSize, Color3.new(0.5, 0.3, 0.1), mazeFolder)
+	floor.Name = "Floor"
+	upfloor.Name = "UpFloor"
+	upfloor.CanCollide = false
+	upfloor.Transparency = 0
+
+	for y = 1, #maze do
+		for x = 1, #maze[y] do
+			local cell = maze[y][x]
+			local cellX = (x - 1) * cellSize
+			local cellY = (y - 1) * cellSize
+			if cell.north then
+				local wallPosition = Vector3.new(cellX + cellSize / 2, wallHeight / 2, cellY)
+				local wallSize = Vector3.new(cellSize, wallHeight, 1)
+				local wall = createPart(wallPosition, wallSize, Color3.new(0.7, 0.7, 0.7), mazeFolder)
+				wall.Name = "NorthWall_" .. x .. "_" .. y
+			end
+
+			if cell.east then
+				local wallPosition = Vector3.new(cellX + cellSize, wallHeight / 2, cellY + cellSize / 2)
+				local wallSize = Vector3.new(1, wallHeight, cellSize)
+				local wall = createPart(wallPosition, wallSize, Color3.new(0.7, 0.7, 0.7), mazeFolder)
+				wall.Name = "EastWall_" .. x .. "_" .. y
+			end
+
+			if cell.south then
+				local wallPosition = Vector3.new(cellX + cellSize / 2, wallHeight / 2, cellY + cellSize)
+				local wallSize = Vector3.new(cellSize, wallHeight, 1)
+				local wall = createPart(wallPosition, wallSize, Color3.new(0.7, 0.7, 0.7), mazeFolder)
+				wall.Name = "SouthWall_" .. x .. "_" .. y
+			end
+
+			if cell.west then
+				local wallPosition = Vector3.new(cellX, wallHeight / 2, cellY + cellSize / 2)
+				local wallSize = Vector3.new(1, wallHeight, cellSize)
+				local wall = createPart(wallPosition, wallSize, Color3.new(0.7, 0.7, 0.7), mazeFolder)
+				wall.Name = "WestWall_" .. x .. "_" .. y
+			end
+		end
+	end
+end
+
+local function createEntranceAndExit()
+	local entrance = Instance.new("Part")
+	entrance.Anchored = true
+	entrance.CanCollide = false
+	entrance.Size = Vector3.new(cellSize,wallHeight,cellSize)
+	entrance.Position = entrancePosition + mazeOrigin
+	entrance.Color = Color3.new(0,1,0)
+	entrance.Transparency = 0.5
+	entrance.Material = Enum.Material.Neon
+	entrance.Name = "Entrance"
+	entrance.Parent = mazeFolder
+
+	local exit = Instance.new("Part")
+	local playerspawn = workspace.SpawnLocation
+	exit.Anchored = true
+	exit.CanCollide = false
+	exit.Size = Vector3.new(cellSize,wallHeight,cellSize)
+	exit.Position = exitPositionOffset + mazeOrigin
+	exit.Color = Color3.new(1,0,0)
+	exit.Transparency = 1
+	exit.Material = Enum.Material.Neon
+	exit.Name = "Exit"
+	exit.Parent = mazeFolder
+	playerspawn.Position = spawnPositionOffset + mazeOrigin
+end
+
+-- Основной процесс генерации лабиринта
+local maze = generateMaze(mazeWidth, mazeHeight)
+carvePath(maze, 1, 1) -- Начинаем генерацию из верхнего левого угла
+buildMaze(maze)
+createEntranceAndExit()
